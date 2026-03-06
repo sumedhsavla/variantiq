@@ -3,7 +3,7 @@
 > **AI-Powered Electronics Inventory Intelligence Dashboard**  
 > Detects hidden stockouts, variant-level imbalances, and recommends inventory reallocations for Apple & Samsung retail stores.
 
-🔗 **[Live Demo →](https://YOUR_USERNAME.github.io/variantiq/)**
+🔗 **[Live Demo →](https://sumedhsavla.github.io/variantiq/)**
 
 ---
 
@@ -116,7 +116,7 @@ Upload your own inventory data with smart column mapping:
 ## 🚀 Getting Started
 
 ### Option 1: View Live
-Visit the **[Live Demo →](https://YOUR_USERNAME.github.io/variantiq/)**
+Visit the **[Live Demo →](https://sumedhsavla.github.io/variantiq/)**
 
 ### Option 2: Run Locally
 ```bash
@@ -157,5 +157,6 @@ Based on the demo dataset analysis:
 MIT — free to use, modify, and distribute.
 
 ---
+
 
 *Built as a portfolio project demonstrating inventory analytics, data visualization, and retail intelligence concepts.*
