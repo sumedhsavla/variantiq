@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VariantIQ — Variant Imbalance Agent</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--card:#141419;--border:#2a2a35;--text:#e4e4e8;--dim:#8a8a9a;--muted:#5a5a6a;--accent:#6366f1;--accentGlow:rgba(99,102,241,0.15);--green:#34d399;--red:#f87171;--yellow:#fbbf24;--cyan:#22d3ee;--purple:#a78bfa;--pink:#f472b6}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;display:flex;min-height:100vh;overflow:hidden}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+#sidebar{width:220px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:width .2s ease;overflow:hidden}
+#sidebar.collapsed{width:60px}
+#sidebar-logo{padding:20px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;min-height:60px}
+#sidebar.collapsed #sidebar-logo{padding:16px 14px}
+.logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.logo-text{white-space:nowrap}.logo-title{font-size:14px;font-weight:700}.logo-sub{font-size:10px;color:var(--muted)}
+#sidebar.collapsed .logo-text,#sidebar.collapsed .nav-label,#sidebar.collapsed #sidebar-footer{display:none}
+#sidebar-nav{padding:12px 8px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:2px;transition:all .15s;border:1px solid transparent;font-size:13px;color:var(--dim)}
+#sidebar.collapsed .nav-item{padding:10px 14px;justify-content:center}
+.nav-item:hover{background:rgba(255,255,255,0.03)}
+.nav-item.active{background:var(--accentGlow);border-color:rgba(99,102,241,0.3);color:var(--text);font-weight:600}
+.nav-icon{flex-shrink:0;width:18px;height:18px}
+#sidebar-footer{padding:16px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
+#main{flex:1;padding:28px;overflow-y:auto;max-height:100vh}
+.page{display:none}.page.active{display:block}
+h2{font-size:22px;font-weight:700;margin:0}
+.subtitle{color:var(--dim);font-size:13px;margin:4px 0 0}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.metrics{display:flex;gap:12px;margin:16px 0 20px;flex-wrap:wrap}
+.metric{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;flex:1;min-width:140px}
+.metric-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.metric-value{font-size:28px;font-weight:700;margin-top:4px}
+.metric-sub{font-size:11px;color:var(--dim);margin-top:2px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+select{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;cursor:pointer;font-family:inherit}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}
+.fw600{font-weight:600}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block}
+.badge-shortage{background:rgba(248,113,113,0.15);color:var(--red)}
+.badge-excess{background:rgba(251,191,36,0.15);color:var(--yellow)}
+.badge-balanced{background:rgba(52,211,153,0.15);color:var(--green)}
+.alert{border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500}
+.alert-red{background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);color:var(--red)}
+.alert-green{background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);color:var(--green)}
+.alert-blue{background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:var(--accent)}
+.phase-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.phase-title{font-size:14px;font-weight:700}.phase-months{font-size:11px;color:var(--dim);margin-top:4px}
+.phase-desc{font-size:12px;color:var(--muted);margin-top:8px}.phase-pct{font-size:26px;font-weight:800;margin-top:8px}
+.phase-sub{font-size:10px;color:var(--muted)}
+.product-tags{display:flex;flex-wrap:wrap;gap:8px}
+.product-tag{border-radius:8px;padding:8px 14px}.product-tag-name{font-size:12px;font-weight:600}
+.product-tag-phase{font-size:10px;font-weight:600;margin-top:2px;text-transform:uppercase}
+.chart-container{position:relative;width:100%;height:250px}
+.chart-container-lg{height:280px}
+canvas{max-width:100%!important}
+
+/* Upload styles */
+.upload-zone{border:2px dashed var(--border);border-radius:16px;padding:48px 32px;text-align:center;cursor:pointer;transition:all .2s;margin:20px 0}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:var(--accentGlow)}
+.upload-zone h3{font-size:18px;margin-bottom:8px;color:var(--text)}
+.upload-zone p{font-size:13px;color:var(--dim)}
+.upload-icon{font-size:48px;margin-bottom:16px;display:block}
+.btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.btn-primary{background:var(--accent);color:white}.btn-primary:hover{background:#5558e6}
+.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent)}.btn-outline:hover{background:var(--accentGlow)}
+.btn-sm{padding:6px 14px;font-size:12px}
+.btn-green{background:var(--green);color:#000}.btn-green:hover{opacity:.9}
+.btn-red{background:transparent;color:var(--red);border:1px solid rgba(248,113,113,0.3)}.btn-red:hover{background:rgba(248,113,113,0.1)}
+.mapping-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.mapping-label{width:160px;font-size:13px;color:var(--text);font-weight:500}
+.mapping-arrow{color:var(--muted);font-size:16px}
+.mapping-required{font-size:10px;color:var(--red);margin-left:4px}
+.mapping-optional{font-size:10px;color:var(--muted);margin-left:4px}
+.data-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);color:var(--accent);margin-right:8px}
+.preview-scroll{max-height:300px;overflow:auto;border-radius:8px;border:1px solid var(--border)}
+.tab-bar{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab-btn{padding:8px 16px;font-size:12px;font-weight:500;color:var(--dim);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;transition:all .15s}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn:hover{color:var(--text)}
+.success-banner{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.success-banner span:first-child{font-size:24px}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-logo" onclick="toggleSidebar()">
+    <div class="logo-icon">📱</div>
+    <div class="logo-text"><div class="logo-title">VariantIQ</div><div class="logo-sub">Inventory Intelligence</div></div>
+  </div>
+  <nav id="sidebar-nav"></nav>
+  <div id="sidebar-footer">8 stores · 8 products<br>Apple & Samsung</div>
+</div>
+
+<div id="main">
+  <div id="page-upload" class="page active"></div>
+  <div id="page-overview" class="page"></div>
+  <div id="page-demand" class="page"></div>
+  <div id="page-imbalance" class="page"></div>
+  <div id="page-stockouts" class="page"></div>
+  <div id="page-reallocation" class="page"></div>
+  <div id="page-lifecycle" class="page"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+let DATA = [];
+let dataSource = "none"; // "none", "demo", "uploaded"
+let uploadedFileName = "";
+
+// ════════════════════════════════════════
+// MOCK DATA
+// ════════════════════════════════════════
+const STORES=[{id:"S01",name:"Manhattan Flagship",region:"Northeast"},{id:"S02",name:"Brooklyn Heights",region:"Northeast"},{id:"S03",name:"San Francisco",region:"West"},{id:"S04",name:"Beverly Hills",region:"West"},{id:"S05",name:"Chicago Loop",region:"Midwest"},{id:"S06",name:"Miami Beach",region:"Southeast"},{id:"S07",name:"Dallas Galleria",region:"South"},{id:"S08",name:"Seattle Downtown",region:"West"}];
+const PRODUCTS=[
+{brand:"Apple",model:"iPhone 16 Pro Max",variants:["128GB","256GB","512GB","1TB"],colors:["Black Titanium","White Titanium","Natural Titanium","Desert Titanium"],phase:"launch"},
+{brand:"Apple",model:"iPhone 16 Pro",variants:["128GB","256GB","512GB","1TB"],colors:["Black Titanium","White Titanium","Natural Titanium","Desert Titanium"],phase:"launch"},
+{brand:"Apple",model:"iPhone 15",variants:["128GB","256GB","512GB"],colors:["Black","Blue","Green","Yellow","Pink"],phase:"mid"},
+{brand:"Apple",model:"iPhone 14",variants:["128GB","256GB","512GB"],colors:["Blue","Purple","Yellow","Midnight","Starlight"],phase:"late"},
+{brand:"Samsung",model:"Galaxy S25 Ultra",variants:["256GB","512GB","1TB"],colors:["Titanium Black","Titanium Gray","Titanium Blue","Titanium Silver"],phase:"launch"},
+{brand:"Samsung",model:"Galaxy S25+",variants:["256GB","512GB"],colors:["Navy","Icy Blue","Mint","Silver Shadow"],phase:"launch"},
+{brand:"Samsung",model:"Galaxy S24",variants:["128GB","256GB"],colors:["Onyx Black","Marble Gray","Cobalt Violet","Amber Yellow"],phase:"mid"},
+{brand:"Samsung",model:"Galaxy S23",variants:["128GB","256GB"],colors:["Phantom Black","Cream","Green","Lavender"],phase:"late"}
+];
+const DEMAND_PROFILES={launch:{premium:.4,mid:.35,budget:.25},mid:{premium:.15,mid:.3,budget:.55},late:{premium:.08,mid:.22,budget:.7}};
+const LIFECYCLE=[{m:"Mo 1",p:45,mid:35,b:20},{m:"Mo 2",p:40,mid:35,b:25},{m:"Mo 3",p:32,mid:38,b:30},{m:"Mo 4",p:25,mid:35,b:40},{m:"Mo 5",p:18,mid:32,b:50},{m:"Mo 6",p:12,mid:28,b:60},{m:"Mo 7",p:10,mid:25,b:65},{m:"Mo 8",p:8,mid:22,b:70}];
+const COLORS_CHART=["#6366f1","#fbbf24","#34d399","#f87171","#a78bfa","#f472b6","#22d3ee"];
+
+function seededRandom(seed){let s=seed;return()=>{s=(s*16807)%2147483647;return(s-1)/2147483646}}
+function generateMockData(){
+  const rng=seededRandom(42),records=[];
+  STORES.forEach(store=>{PRODUCTS.forEach(product=>{const profile=DEMAND_PROFILES[product.phase];
+    product.variants.forEach((variant,vi)=>{
+      const isH=vi===product.variants.length-1,isB=vi===0;let ds;const vl=product.variants.length;
+      if(vl<=2)ds=isB?profile.budget+profile.mid*.5:profile.premium+profile.mid*.5;
+      else if(vl===3)ds=vi===0?profile.budget:vi===1?profile.mid:profile.premium;
+      else ds=vi===0?profile.budget:vi===1?profile.mid*.6:vi===2?profile.mid*.4+profile.premium*.3:profile.premium*.7;
+      const tp=Math.floor(rng()*20+8),is=isH?.35+rng()*.2:isB?.08+rng()*.12:.15+rng()*.15;
+      const stock=Math.max(0,Math.floor(tp*is)),wd=Math.max(1,Math.floor(tp*ds*(.8+rng()*.4)));
+      product.colors.forEach(color=>{
+        records.push({store:store.id,storeName:store.name,region:store.region,brand:product.brand,model:product.model,variant,color,phase:product.phase,
+          stock:Math.max(0,Math.floor(stock/product.colors.length+(rng()>.5?1:-1)*Math.floor(rng()*2))),
+          weeklyDemand:Math.max(0,Math.floor(wd/product.colors.length+(rng()>.5?1:0))),
+          demandShare:Math.round(ds*100)});
+      });
+    });
+  });});
+  return records;
+}
+
+// ════════════════════════════════════════
+// ANALYTICS
+// ════════════════════════════════════════
+function aggByVariant(data,model){
+  const f=data.filter(r=>!model||r.model===model),m={};
+  f.forEach(r=>{if(!m[r.variant])m[r.variant]={variant:r.variant,stock:0,demand:0,ds:0,c:0};m[r.variant].stock+=r.stock;m[r.variant].demand+=r.weeklyDemand;m[r.variant].ds+=r.demandShare;m[r.variant].c+=1});
+  const arr=Object.values(m).map(v=>({...v,demandShare:Math.round(v.ds/v.c),invShare:0}));
+  const ts=arr.reduce((s,x)=>s+x.stock,0);
+  return arr.map(v=>({...v,invShare:ts>0?Math.round(v.stock/ts*100):0}));
+}
+function findImbalances(data,model){return aggByVariant(data,model).map(v=>{const g=v.demandShare-v.invShare;return{...v,gap:g,status:g>10?"Shortage":g<-10?"Excess":"Balanced"}})}
+function findHiddenStockouts(data){
+  const m={};data.forEach(r=>{const k=r.store+"|"+r.model;if(!m[k])m[k]={store:r.storeName,model:r.model,brand:r.brand,variants:{},ts:0};if(!m[k].variants[r.variant])m[k].variants[r.variant]={s:0,d:0};m[k].variants[r.variant].s+=r.stock;m[k].variants[r.variant].d+=r.weeklyDemand;m[k].ts+=r.stock});
+  const issues=[];Object.values(m).forEach(e=>{if(e.ts>0)Object.entries(e.variants).forEach(([v,info])=>{if(info.s===0&&info.d>0)issues.push({store:e.store,model:e.model,brand:e.brand,variant:v,weeklyDemand:info.d})})});
+  return issues;
+}
+function findReallocations(data){
+  const sugg=[],models=[...new Set(data.map(r=>r.model))];
+  models.forEach(model=>{[...new Set(data.filter(r=>r.model===model).map(r=>r.variant))].forEach(variant=>{
+    const sd={};data.filter(r=>r.model===model&&r.variant===variant).forEach(r=>{if(!sd[r.store])sd[r.store]={n:r.storeName,s:0,d:0};sd[r.store].s+=r.stock;sd[r.store].d+=r.weeklyDemand});
+    const entries=Object.entries(sd).map(([id,d])=>({id,...d,ratio:d.d>0?d.s/d.d:99}));
+    const surplus=entries.filter(e=>e.ratio>2.5&&e.s>3).sort((a,b)=>b.ratio-a.ratio);
+    const deficit=entries.filter(e=>e.ratio<.5&&e.d>1).sort((a,b)=>a.ratio-b.ratio);
+    if(surplus.length&&deficit.length){const f=surplus[0],t=deficit[0],qty=Math.min(Math.floor(f.s*.4),Math.max(1,t.d-t.s));
+      if(qty>0)sugg.push({model,variant,from:f.n,to:t.n,qty,fr:f.ratio.toFixed(1),tr:t.ratio.toFixed(1)})}
+  })});return sugg.slice(0,20);
+}
+function getUniqueModels(data){return[...new Set(data.map(r=>r.model))];}
+
+// ════════════════════════════════════════
+// CHARTS
+// ════════════════════════════════════════
+const charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id]}}
+function createChart(id,config){destroyChart(id);const ctx=document.getElementById(id);if(ctx)charts[id]=new Chart(ctx,config)}
+const CD={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:"#8a8a9a",font:{size:11}}},tooltip:{backgroundColor:"#141419",borderColor:"#2a2a35",borderWidth:1,titleColor:"#e4e4e8",bodyColor:"#e4e4e8",bodyFont:{size:12}}},scales:{x:{ticks:{color:"#5a5a6a",font:{size:11}},grid:{color:"#2a2a35"}},y:{ticks:{color:"#5a5a6a",font:{size:11}},grid:{color:"#2a2a35"}}}};
+
+// ════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════
+const NAV=[
+  {key:"upload",label:"Data Source",color:"#22d3ee",path:"M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"},
+  {key:"overview",label:"Overview",color:"#22d3ee",path:"M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"},
+  {key:"demand",label:"Demand Tracking",color:"#6366f1",path:"M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 12l2 2 4-4"},
+  {key:"imbalance",label:"Imbalance",color:"#fbbf24",path:"M12 3v18M3 12h18"},
+  {key:"stockouts",label:"Hidden Stockouts",color:"#f87171",path:"M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"},
+  {key:"reallocation",label:"Reallocation",color:"#34d399",path:"M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"},
+  {key:"lifecycle",label:"Lifecycle",color:"#a78bfa",path:"M22 12l-4 0-3 9-6-18-3 9-4 0"}
+];
+let currentPage="upload";
+
+function buildNav(){
+  const nav=document.getElementById("sidebar-nav");
+  nav.innerHTML=NAV.map(n=>{
+    const disabled=(n.key!=="upload"&&dataSource==="none");
+    return`<div class="nav-item${n.key===currentPage?" active":""}${disabled?" disabled":""}" onclick="${disabled?"":"navigate('"+n.key+"')"}" style="${disabled?"opacity:0.3;cursor:not-allowed":""}">
+    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="${n.color}" stroke-width="2" stroke-linecap="round"><path d="${n.path}"/></svg>
+    <span class="nav-label">${n.label}</span></div>`;
+  }).join("");
+}
+
+function navigate(page){
+  if(page!=="upload"&&dataSource==="none")return;
+  currentPage=page;
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.getElementById("page-"+page).classList.add("active");
+  buildNav();renderPage(page);
+}
+
+function toggleSidebar(){document.getElementById("sidebar").classList.toggle("collapsed")}
+
+// ════════════════════════════════════════
+// CSV UPLOAD & MAPPING
+// ════════════════════════════════════════
+let csvRawData=null, csvHeaders=[];
+const REQUIRED_FIELDS=[
+  {key:"store",label:"Store Name",desc:"Store identifier or name"},
+  {key:"model",label:"Product Model",desc:"e.g. iPhone 16 Pro Max"},
+  {key:"variant",label:"Variant / Storage",desc:"e.g. 128GB, 256GB"},
+  {key:"stock",label:"Stock / Inventory",desc:"Current units in stock"},
+  {key:"weeklyDemand",label:"Weekly Demand / Sales",desc:"Units sold or demanded per week"}
+];
+const OPTIONAL_FIELDS=[
+  {key:"brand",label:"Brand",desc:"e.g. Apple, Samsung"},
+  {key:"color",label:"Color",desc:"Product color variant"},
+  {key:"region",label:"Region",desc:"Store region or area"},
+  {key:"sku",label:"SKU",desc:"Product SKU code"},
+  {key:"phase",label:"Lifecycle Phase",desc:"launch, mid, late"}
+];
+
+function downloadTemplate(){
+  const csv="store,brand,model,variant,color,region,stock,weeklyDemand,phase\nManhattan Flagship,Apple,iPhone 16 Pro Max,256GB,Black Titanium,Northeast,12,8,launch\nManhattan Flagship,Apple,iPhone 16 Pro Max,512GB,Black Titanium,Northeast,3,15,launch\nBrooklyn Heights,Samsung,Galaxy S25 Ultra,256GB,Titanium Black,Northeast,7,10,launch\nSan Francisco,Apple,iPhone 15,128GB,Black,West,2,18,mid\nSan Francisco,Apple,iPhone 15,256GB,Black,West,8,6,mid\nChicago Loop,Samsung,Galaxy S24,128GB,Onyx Black,Midwest,1,12,mid\nMiami Beach,Apple,iPhone 14,128GB,Blue,Southeast,15,20,late\nDallas Galleria,Samsung,Galaxy S23,128GB,Phantom Black,South,10,14,late";
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="variantiq_template.csv";a.click();
+}
+
+function handleFile(file){
+  if(!file||!file.name.endsWith(".csv")){alert("Please upload a CSV file");return}
+  uploadedFileName=file.name;
+  Papa.parse(file,{header:true,dynamicTyping:true,skipEmptyLines:true,delimitersToGuess:[',','\t','|',';'],
+    complete:function(results){
+      csvHeaders=results.meta.fields.map(h=>h.trim());
+      csvRawData=results.data;
+      showMapping();
+    },
+    error:function(err){alert("Error parsing CSV: "+err.message)}
+  });
+}
+
+function showMapping(){
+  const el=document.getElementById("page-upload");
+  const autoMap={};
+  const aliases={
+    store:["store","store_name","storename","location","store name","outlet"],
+    model:["model","product","product_name","productname","product name","device","item"],
+    variant:["variant","storage","size","capacity","config","configuration","sku_variant"],
+    stock:["stock","inventory","qty","quantity","units","on_hand","onhand","units_on_hand","in_stock"],
+    weeklyDemand:["weeklydemand","weekly_demand","demand","sales","weekly_sales","weeklysales","sold","units_sold"],
+    brand:["brand","manufacturer","make"],
+    color:["color","colour"],
+    region:["region","area","territory","zone","district"],
+    sku:["sku","sku_code","product_code","upc","barcode"],
+    phase:["phase","lifecycle","stage","cycle"]
+  };
+  const allFields=[...REQUIRED_FIELDS,...OPTIONAL_FIELDS];
+  allFields.forEach(f=>{
+    const lowerHeaders=csvHeaders.map(h=>h.toLowerCase().replace(/[\s_-]+/g,''));
+    const fieldAliases=aliases[f.key]||[];
+    for(let i=0;i<csvHeaders.length;i++){
+      if(fieldAliases.some(a=>a.replace(/[\s_-]+/g,'')===lowerHeaders[i])){autoMap[f.key]=csvHeaders[i];break}
+    }
+  });
+
+  el.innerHTML=`
+    <div style="max-width:700px">
+      <h2>Map Your Columns</h2>
+      <p class="subtitle">We detected ${csvHeaders.length} columns in <strong>${uploadedFileName}</strong> (${csvRawData.length} rows). Map them to VariantIQ fields.</p>
+      <div class="card" style="margin-top:20px">
+        <div class="card-title">Required Fields</div>
+        ${REQUIRED_FIELDS.map(f=>`<div class="mapping-row">
+          <div class="mapping-label">${f.label} <span class="mapping-required">required</span><br><span style="font-size:11px;color:var(--muted)">${f.desc}</span></div>
+          <span class="mapping-arrow">→</span>
+          <select id="map-${f.key}" style="flex:1">
+            <option value="">— Select column —</option>
+            ${csvHeaders.map(h=>`<option value="${h}"${autoMap[f.key]===h?" selected":""}>${h}</option>`).join("")}
+          </select>
+        </div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-title">Optional Fields</div>
+        ${OPTIONAL_FIELDS.map(f=>`<div class="mapping-row">
+          <div class="mapping-label">${f.label} <span class="mapping-optional">optional</span><br><span style="font-size:11px;color:var(--muted)">${f.desc}</span></div>
+          <span class="mapping-arrow">→</span>
+          <select id="map-${f.key}" style="flex:1">
+            <option value="">— Skip —</option>
+            ${csvHeaders.map(h=>`<option value="${h}"${autoMap[f.key]===h?" selected":""}>${h}</option>`).join("")}
+          </select>
+        </div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-title">Data Preview (First 5 Rows)</div>
+        <div class="preview-scroll">
+          <table><thead><tr>${csvHeaders.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+          <tbody>${csvRawData.slice(0,5).map(row=>`<tr>${csvHeaders.map(h=>`<td>${row[h]!=null?row[h]:""}</td>`).join("")}</tr>`).join("")}</tbody></table>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:16px">
+        <button class="btn btn-primary" onclick="applyMapping()">✓ Import Data</button>
+        <button class="btn btn-outline" onclick="renderUpload()">← Back</button>
+      </div>
+    </div>`;
+}
+
+function applyMapping(){
+  const mapping={};
+  let missing=[];
+  REQUIRED_FIELDS.forEach(f=>{
+    const val=document.getElementById("map-"+f.key).value;
+    if(!val)missing.push(f.label);else mapping[f.key]=val;
+  });
+  if(missing.length){alert("Please map these required fields: "+missing.join(", "));return}
+  OPTIONAL_FIELDS.forEach(f=>{
+    const val=document.getElementById("map-"+f.key).value;
+    if(val)mapping[f.key]=val;
+  });
+
+  // Transform data
+  DATA=csvRawData.map((row,i)=>{
+    const store=String(row[mapping.store]||"Unknown");
+    const model=String(row[mapping.model]||"Unknown");
+    const variant=String(row[mapping.variant]||"Unknown");
+    const stock=parseInt(row[mapping.stock])||0;
+    const weeklyDemand=parseInt(row[mapping.weeklyDemand])||0;
+    const brand=mapping.brand?String(row[mapping.brand]||""):(model.includes("iPhone")||model.includes("iPad")||model.includes("Mac")?"Apple":model.includes("Galaxy")||model.includes("Samsung")?"Samsung":"Other");
+    const color=mapping.color?String(row[mapping.color]||"Default"):"Default";
+    const region=mapping.region?String(row[mapping.region]||""):"";
+    const phase=mapping.phase?String(row[mapping.phase]||"mid"):"mid";
+    return{store:"U"+i,storeName:store,region,brand,model,variant,color,phase,stock,weeklyDemand,demandShare:0};
+  });
+
+  // Calculate demand shares per model
+  const modelGroups={};
+  DATA.forEach(r=>{if(!modelGroups[r.model])modelGroups[r.model]={};if(!modelGroups[r.model][r.variant])modelGroups[r.model][r.variant]=0;modelGroups[r.model][r.variant]+=r.weeklyDemand});
+  DATA.forEach(r=>{
+    const mg=modelGroups[r.model];const total=Object.values(mg).reduce((s,v)=>s+v,0);
+    r.demandShare=total>0?Math.round((mg[r.variant]/total)*100):0;
+  });
+
+  dataSource="uploaded";
+  uploadedFileName=uploadedFileName;
+  updateFooter();
+  buildNav();
+  navigate("overview");
+}
+
+function loadDemoData(){
+  DATA=generateMockData();
+  dataSource="demo";
+  updateFooter();
+  buildNav();
+  navigate("overview");
+}
+
+function resetData(){
+  DATA=[];dataSource="none";csvRawData=null;csvHeaders=[];
+  updateFooter();buildNav();navigate("upload");
+}
+
+function updateFooter(){
+  const f=document.getElementById("sidebar-footer");
+  if(dataSource==="demo")f.innerHTML="Demo Data<br>8 stores · 8 products";
+  else if(dataSource==="uploaded"){
+    const stores=[...new Set(DATA.map(r=>r.storeName))].length;
+    const models=[...new Set(DATA.map(r=>r.model))].length;
+    f.innerHTML=`Uploaded: ${uploadedFileName}<br>${stores} stores · ${models} products`;
+  } else f.innerHTML="No data loaded";
+}
+
+// ════════════════════════════════════════
+// RENDER HELPERS
+// ════════════════════════════════════════
+function productSelect(id,onChange){
+  const models=getUniqueModels(DATA);
+  return`<select id="${id}" onchange="${onChange}">${models.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>`;
+}
+function badge(status){const cls=status==="Shortage"?"badge-shortage":status==="Excess"?"badge-excess":"badge-balanced";return`<span class="badge ${cls}">${status}</span>`}
+function clr(color,text){return`<span style="color:${color};font-weight:600">${text}</span>`}
+
+// ════════════════════════════════════════
+// PAGE RENDERERS
+// ════════════════════════════════════════
+function renderPage(page){
+  const fn={upload:renderUpload,overview:renderOverview,demand:renderDemand,imbalance:renderImbalance,stockouts:renderStockouts,reallocation:renderReallocation,lifecycle:renderLifecycle};
+  if(fn[page])fn[page]();
+}
+
+function renderUpload(){
+  const el=document.getElementById("page-upload");
+  if(dataSource!=="none"){
+    const stores=[...new Set(DATA.map(r=>r.storeName))].length;
+    const models=[...new Set(DATA.map(r=>r.model))].length;
+    const records=DATA.length;
+    el.innerHTML=`
+      <div style="max-width:600px">
+        <h2>Data Source</h2><p class="subtitle">Manage your inventory data</p>
+        <div class="success-banner" style="margin-top:20px"><span>✅</span><div>
+          <div style="font-weight:600;color:var(--green)">${dataSource==="demo"?"Demo Data Loaded":"CSV Imported Successfully"}</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:4px">${records.toLocaleString()} records · ${stores} stores · ${models} products${dataSource==="uploaded"?" · "+uploadedFileName:""}</div>
+        </div></div>
+        <div style="display:flex;gap:12px;margin-top:16px">
+          <button class="btn btn-primary" onclick="navigate('overview')">Go to Dashboard →</button>
+          <button class="btn btn-red" onclick="resetData()">Clear & Re-upload</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML=`
+    <div style="max-width:600px">
+      <h2>Welcome to VariantIQ</h2>
+      <p class="subtitle">Choose a data source to power your inventory analysis</p>
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <span class="upload-icon">📁</span>
+        <h3>Upload Your CSV</h3>
+        <p>Drag & drop your inventory CSV here, or click to browse</p>
+        <p style="margin-top:8px;font-size:11px;color:var(--muted)">Supports: store, model, variant, stock, demand columns</p>
+        <input type="file" id="file-input" accept=".csv" style="display:none" onchange="handleFile(this.files[0])"/>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin:12px 0">— or —</div>
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-weight:600;font-size:14px">Load Demo Data</div><div style="font-size:12px;color:var(--dim);margin-top:4px">8 stores · 8 Apple & Samsung products · realistic mock data</div></div>
+        <button class="btn btn-green" onclick="loadDemoData()">Load Demo</button>
+      </div>
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-weight:600;font-size:14px">Download CSV Template</div><div style="font-size:12px;color:var(--dim);margin-top:4px">Get a pre-formatted CSV with the right columns to fill in</div></div>
+        <button class="btn btn-outline btn-sm" onclick="downloadTemplate()">↓ Template</button>
+      </div>
+    </div>`;
+
+  // Drag & drop
+  const dz=document.getElementById("drop-zone");
+  if(dz){
+    dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over")});
+    dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
+    dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");handleFile(e.dataTransfer.files[0])});
+  }
+}
+
+function renderOverview(){
+  const el=document.getElementById("page-overview");
+  const ts=DATA.reduce((s,r)=>s+r.stock,0),td=DATA.reduce((s,r)=>s+r.weeklyDemand,0);
+  const so=findHiddenStockouts(DATA),ra=findReallocations(DATA);
+  const hs=Math.max(0,100-so.length*2-ra.length);
+  const brands={};DATA.forEach(r=>{brands[r.brand]=(brands[r.brand]||0)+r.stock});
+  const brandData=Object.entries(brands);
+  const byRegion={};DATA.forEach(r=>{const reg=r.region||r.storeName;byRegion[reg]=(byRegion[reg]||0)+r.stock});
+  const regionData=Object.entries(byRegion).slice(0,10);
+
+  const srcBadge=dataSource==="demo"?`<span class="data-badge">📊 Demo Data</span>`:`<span class="data-badge">📁 ${uploadedFileName}</span>`;
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><h2>Overview</h2><p class="subtitle">Real-time inventory intelligence ${srcBadge}</p></div>
+      <button class="btn btn-outline btn-sm" onclick="navigate('upload')">Change Data Source</button>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Total Units</div><div class="metric-value">${ts.toLocaleString()}</div><div class="metric-sub">across all stores</div></div>
+      <div class="metric"><div class="metric-label">Weekly Demand</div><div class="metric-value" style="color:var(--accent)">${td.toLocaleString()}</div><div class="metric-sub">projected units</div></div>
+      <div class="metric"><div class="metric-label">Hidden Stockouts</div><div class="metric-value" style="color:var(--red)">${so.length}</div><div class="metric-sub">conversion at risk</div></div>
+      <div class="metric"><div class="metric-label">Health Score</div><div class="metric-value" style="color:${hs>70?"var(--green)":"var(--yellow)"}">${hs}%</div><div class="metric-sub">inventory balance</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card"><div class="card-title">Inventory by Brand</div><div class="chart-container" style="height:200px"><canvas id="chart-brand"></canvas></div></div>
+      <div class="card"><div class="card-title">Stock by ${DATA.some(r=>r.region)?"Region":"Store"}</div><div class="chart-container" style="height:200px"><canvas id="chart-region"></canvas></div></div>
+    </div>
+    <div class="card"><div class="card-title">Top Critical Stockouts</div>
+      ${so.length?`<table><thead><tr><th>Store</th><th>Model</th><th>Variant</th><th>Lost Demand/wk</th></tr></thead>
+      <tbody>${so.slice(0,8).map(r=>`<tr><td>${r.store}</td><td>${r.model}</td><td>${r.variant}</td><td>${clr("var(--red)",r.weeklyDemand)}</td></tr>`).join("")}</tbody></table>`
+      :`<div style="text-align:center;padding:24px;color:var(--green)">✓ No hidden stockouts detected</div>`}
+    </div>`;
+
+  createChart("chart-brand",{type:"doughnut",data:{labels:brandData.map(b=>b[0]),datasets:[{data:brandData.map(b=>b[1]),backgroundColor:COLORS_CHART.slice(0,brandData.length),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"60%",plugins:{legend:{labels:{color:"#8a8a9a",font:{size:11}}}}}});
+  createChart("chart-region",{type:"bar",data:{labels:regionData.map(r=>r[0].length>12?r[0].slice(0,12)+"…":r[0]),datasets:[{data:regionData.map(r=>r[1]),backgroundColor:"#6366f1",borderRadius:4}]},options:{...CD,plugins:{...CD.plugins,legend:{display:false}}}});
+}
+
+function renderDemand(){
+  const el=document.getElementById("page-demand");
+  el.innerHTML=`
+    <div class="page-header"><div><h2>Variant Demand</h2><p class="subtitle">SKU-level demand distribution analysis</p></div>${productSelect("demand-select","updateDemand()")}</div>
+    <div class="grid-2">
+      <div class="card"><div class="card-title">Demand Share by Variant</div><div class="chart-container"><canvas id="chart-demand-pie"></canvas></div></div>
+      <div class="card"><div class="card-title">Demand vs Stock</div><div class="chart-container"><canvas id="chart-demand-bar"></canvas></div></div>
+    </div>
+    <div class="card"><div class="card-title">Variant Breakdown</div><div id="demand-table"></div></div>`;
+  updateDemand();
+}
+function updateDemand(){
+  const model=document.getElementById("demand-select").value;
+  const agg=aggByVariant(DATA,model);
+  document.getElementById("demand-table").innerHTML=`<table><thead><tr><th>Variant</th><th>Demand %</th><th>Inventory %</th><th>Weekly Demand</th><th>Stock</th></tr></thead>
+    <tbody>${agg.map(r=>`<tr><td class="fw600">${r.variant}</td><td>${r.demandShare}%</td><td>${r.invShare}%</td><td>${r.demand}</td><td>${r.stock}</td></tr>`).join("")}</tbody></table>`;
+  createChart("chart-demand-pie",{type:"doughnut",data:{labels:agg.map(r=>r.variant),datasets:[{data:agg.map(r=>r.demandShare),backgroundColor:COLORS_CHART.slice(0,agg.length),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"55%",plugins:{legend:{labels:{color:"#8a8a9a",font:{size:11}}}}}});
+  createChart("chart-demand-bar",{type:"bar",data:{labels:agg.map(r=>r.variant),datasets:[{label:"Weekly Demand",data:agg.map(r=>r.demand),backgroundColor:"#6366f1",borderRadius:3},{label:"Current Stock",data:agg.map(r=>r.stock),backgroundColor:"#34d399",borderRadius:3}]},options:CD});
+}
+
+function renderImbalance(){
+  const el=document.getElementById("page-imbalance");
+  el.innerHTML=`
+    <div class="page-header"><div><h2>Imbalance Detection</h2><p class="subtitle">Demand vs inventory mismatch analysis</p></div>${productSelect("imb-select","updateImbalance()")}</div>
+    <div class="card"><div class="card-title">Demand % vs Inventory %</div><div class="chart-container" style="height:260px"><canvas id="chart-imb"></canvas></div></div>
+    <div class="card"><div class="card-title">Gap Analysis</div><div id="imb-table"></div></div>`;
+  updateImbalance();
+}
+function updateImbalance(){
+  const model=document.getElementById("imb-select").value;
+  const imb=findImbalances(DATA,model);
+  document.getElementById("imb-table").innerHTML=`<table><thead><tr><th>Variant</th><th>Demand %</th><th>Inventory %</th><th>Gap</th><th>Status</th></tr></thead>
+    <tbody>${imb.map(r=>`<tr><td class="fw600">${r.variant}</td><td>${r.demandShare}%</td><td>${r.invShare}%</td><td>${clr(r.gap>0?"var(--red)":r.gap<0?"var(--yellow)":"var(--green)",(r.gap>0?"+":"")+r.gap+"pp")}</td><td>${badge(r.status)}</td></tr>`).join("")}</tbody></table>`;
+  createChart("chart-imb",{type:"bar",data:{labels:imb.map(r=>r.variant),datasets:[{label:"Demand %",data:imb.map(r=>r.demandShare),backgroundColor:"#6366f1",borderRadius:3},{label:"Inventory %",data:imb.map(r=>r.invShare),backgroundColor:"#fbbf24",borderRadius:3}]},options:CD});
+}
+
+function renderStockouts(){
+  const el=document.getElementById("page-stockouts");
+  const so=findHiddenStockouts(DATA);
+  const brands=[...new Set(DATA.map(r=>r.brand))];
+  el.innerHTML=`
+    <div class="page-header"><div><h2>Hidden Stockouts</h2><p class="subtitle">Products showing "in stock" but key variants unavailable</p></div>
+      <select id="so-brand" onchange="updateStockouts()"><option value="All">All Brands</option>${brands.map(b=>`<option value="${b}">${b}</option>`).join("")}</select></div>
+    <div class="alert alert-red"><span style="font-size:20px">⚠</span><span id="so-count"></span></div>
+    <div class="card"><div id="so-table"></div></div>`;
+  window._stockouts=so;updateStockouts();
+}
+function updateStockouts(){
+  const brand=document.getElementById("so-brand").value;
+  const filtered=brand==="All"?window._stockouts:window._stockouts.filter(r=>r.brand===brand);
+  document.getElementById("so-count").textContent=filtered.length+" hidden stockouts detected — customers see \"in stock\" but can't buy what they want";
+  document.getElementById("so-table").innerHTML=filtered.length?`<table><thead><tr><th>Store</th><th>Brand</th><th>Model</th><th>Missing Variant</th><th>Lost Demand/wk</th></tr></thead>
+    <tbody>${filtered.slice(0,25).map(r=>`<tr><td>${r.store}</td><td>${r.brand}</td><td class="fw600">${r.model}</td><td>${clr("var(--red)",r.variant)}</td><td>${clr("var(--yellow)",r.weeklyDemand)}</td></tr>`).join("")}</tbody></table>
+    ${filtered.length>25?`<div style="color:var(--muted);font-size:11px;margin-top:10px">Showing 25 of ${filtered.length}</div>`:""}`
+    :`<div style="text-align:center;padding:24px;color:var(--green)">✓ No hidden stockouts found</div>`;
+}
+
+function renderReallocation(){
+  const el=document.getElementById("page-reallocation");
+  const sugg=findReallocations(DATA);
+  el.innerHTML=`
+    <div><h2>Reallocation</h2><p class="subtitle">Recommended inventory transfers between stores</p></div>
+    <div class="alert alert-green" style="margin-top:16px"><span style="font-size:20px">📦</span><span>${sugg.length} transfer opportunities to optimize variant availability</span></div>
+    <div class="card">${sugg.length?`<table><thead><tr><th>Model</th><th>Variant</th><th>From</th><th>To</th><th>Units</th><th>Surplus</th><th>Deficit</th></tr></thead>
+    <tbody>${sugg.map(r=>`<tr><td class="fw600">${r.model}</td><td>${r.variant}</td><td>${clr("var(--green)",r.from)}</td><td>${clr("var(--red)",r.to)}</td><td>${clr("var(--accent)",r.qty)}</td><td style="color:var(--dim)">${r.fr}x</td><td style="color:var(--dim)">${r.tr}x</td></tr>`).join("")}</tbody></table>`
+    :`<div style="text-align:center;padding:24px;color:var(--green)">✓ Inventory is well-balanced across stores</div>`}</div>`;
+}
+
+function renderLifecycle(){
+  const el=document.getElementById("page-lifecycle");
+  const phases={};DATA.forEach(r=>{phases[r.phase]=(phases[r.phase]||0)+1});
+  const hasPhases=Object.keys(phases).length>1;
+
+  el.innerHTML=`
+    <div><h2>Lifecycle Shifts</h2><p class="subtitle">How variant demand evolves from launch to end-of-life</p></div>
+    <div class="card" style="margin-top:16px"><div class="card-title">Demand Migration Over Time (Industry Model)</div><div class="chart-container chart-container-lg"><canvas id="chart-lifecycle"></canvas></div></div>
+    <div class="grid-3">
+      ${[{phase:"Launch",desc:"Early adopters drive premium demand",pct:"40%",color:"var(--accent)",months:"Months 1–2"},
+         {phase:"Mid-Cycle",desc:"Mainstream shifts to mid-tier",pct:"55%",color:"var(--yellow)",months:"Months 3–5"},
+         {phase:"Late Cycle",desc:"Budget variants dominate",pct:"70%",color:"var(--green)",months:"Months 6–8"}]
+        .map(p=>`<div class="phase-card" style="border-top:3px solid ${p.color}"><div class="phase-title">${p.phase}</div><div class="phase-months">${p.months}</div><div class="phase-desc">${p.desc}</div><div class="phase-pct" style="color:${p.color}">${p.pct}</div><div class="phase-sub">peak variant share</div></div>`).join("")}
+    </div>
+    ${hasPhases?`<div class="card" style="margin-top:16px"><div class="card-title">Your Products by Phase</div>
+      <div class="product-tags">${getUniqueModels(DATA).map(m=>{
+        const p=DATA.find(r=>r.model===m);const ph=p?p.phase:"mid";
+        const c=ph==="launch"?"99,102,241":ph==="mid"?"251,191,36":"52,211,153";
+        const cv=ph==="launch"?"var(--accent)":ph==="mid"?"var(--yellow)":"var(--green)";
+        return`<div class="product-tag" style="background:rgba(${c},0.1);border:1px solid rgba(${c},0.3)"><div class="product-tag-name">${m}</div><div class="product-tag-phase" style="color:${cv}">${ph}</div></div>`;
+      }).join("")}</div></div>`:""}`;
+
+  createChart("chart-lifecycle",{type:"line",data:{labels:LIFECYCLE.map(r=>r.m),datasets:[
+    {label:"Premium (512GB/1TB)",data:LIFECYCLE.map(r=>r.p),borderColor:"#6366f1",backgroundColor:"rgba(99,102,241,0.1)",fill:true,tension:.4,borderWidth:2,pointRadius:3},
+    {label:"Mid (256GB)",data:LIFECYCLE.map(r=>r.mid),borderColor:"#fbbf24",backgroundColor:"rgba(251,191,36,0.1)",fill:true,tension:.4,borderWidth:2,pointRadius:3},
+    {label:"Budget (128GB)",data:LIFECYCLE.map(r=>r.b),borderColor:"#34d399",backgroundColor:"rgba(52,211,153,0.1)",fill:true,tension:.4,borderWidth:2,pointRadius:3}
+  ]},options:{...CD,scales:{...CD.scales,y:{...CD.scales.y,title:{display:true,text:"Demand %",color:"#5a5a6a"}}}}});
+}
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+buildNav();
+renderUpload();
+</script>
+</body>
+</html>
